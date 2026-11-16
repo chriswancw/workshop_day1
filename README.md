@@ -21,7 +21,7 @@ release output.
 | Path | Branch | Contents |
 | --- | --- | --- |
 | `backend/` | `backend` | Zero-dependency Bun API server |
-| `frontend/` | `frontend` | Angular 19 web app |
+| `frontend/` | `frontend` | Angular 22 web app |
 | `cli/` | `cli` | Zero-dependency Node.js CLI |
 | `bundle/` | `bundle` | Generated API, CLI, and built web UI |
 

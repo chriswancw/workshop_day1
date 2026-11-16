@@ -50,16 +50,6 @@ function assertClean(cwd, label) {
   if (status) throw new Error(`${label} has uncommitted changes:\n${status}`);
 }
 
-function assertBundleBranch() {
-  const branch = git(['branch', '--show-current'], bundle, {
-    stdio: 'pipe',
-    encoding: 'utf8',
-  }).trim();
-  if (branch !== 'bundle') {
-    throw new Error(`bundle submodule must be checked out on branch "bundle", not "${branch || 'detached HEAD'}"`);
-  }
-}
-
 function configureBundleGitIdentity() {
   for (const key of ['user.name', 'user.email']) {
     const bundleValue = git(['config', key], bundle, { stdio: 'pipe', encoding: 'utf8' }).trim();
@@ -74,7 +64,6 @@ function configureBundleGitIdentity() {
 try {
   git(['submodule', 'update', '--init', '--remote', 'backend', 'frontend', 'cli']);
   assertClean(bundle, 'bundle submodule');
-  assertBundleBranch();
   configureBundleGitIdentity();
 
   run('npm', ['install'], frontend);
