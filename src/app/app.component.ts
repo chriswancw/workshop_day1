@@ -1,0 +1,102 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { FormControl, FormGroup, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
+import { finalize, Subscription } from 'rxjs';
+import { Link, LinksService } from './links.service';
+
+export const httpUrlValidator: ValidatorFn = (control) => {
+  if (!control.value) {
+    return null;
+  }
+  try {
+    const url = new URL(String(control.value).trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? null : { httpUrl: true };
+  } catch {
+    return { httpUrl: true };
+  }
+};
+
+function errorMessage(error: unknown): string {
+  if (error instanceof HttpErrorResponse) {
+    if (error.status === 0) {
+      return 'Cannot reach the server. Check your connection and try again.';
+    }
+    if (typeof error.error?.error === 'string') {
+      return error.error.error;
+    }
+  }
+  return 'The request failed. Please try again.';
+}
+
+@Component({
+  selector: 'app-root',
+  imports: [ReactiveFormsModule],
+  templateUrl: './app.component.html',
+  styleUrl: './app.component.css'
+})
+export class AppComponent {
+  private readonly api = inject(LinksService);
+  private readonly destroyRef = inject(DestroyRef);
+  private listRequest?: Subscription;
+
+  readonly form = new FormGroup({
+    url: new FormControl('', {
+      nonNullable: true,
+      validators: [Validators.required, httpUrlValidator]
+    })
+  });
+  readonly links = signal<Link[]>([]);
+  readonly result = signal<Link | null>(null);
+  readonly loading = signal(false);
+  readonly submitting = signal(false);
+  readonly submitError = signal('');
+  readonly listError = signal('');
+
+  constructor() {
+    this.form.controls.url.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.submitError.set('');
+        this.result.set(null);
+      });
+    this.refresh();
+  }
+
+  refresh(): void {
+    this.listRequest?.unsubscribe();
+    this.loading.set(true);
+    this.listError.set('');
+    this.listRequest = this.api.list().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.loading.set(false))
+    ).subscribe({
+      next: (links) => this.links.set(links),
+      error: (error: unknown) => this.listError.set(errorMessage(error))
+    });
+  }
+
+  submit(): void {
+    if (this.submitting()) {
+      return;
+    }
+    this.form.markAllAsTouched();
+    if (this.form.invalid) {
+      return;
+    }
+    this.submitting.set(true);
+    this.submitError.set('');
+    this.result.set(null);
+    this.api.create(this.form.controls.url.value.trim()).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.submitting.set(false))
+    ).subscribe({
+      next: (link) => {
+        this.form.reset();
+        this.result.set(link);
+        this.refresh();
+      },
+      error: (error: unknown) => this.submitError.set(errorMessage(error))
+    });
+  }
+}
