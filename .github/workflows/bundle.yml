@@ -27,6 +27,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
       - name: Configure release identity
         run: |
           git config --global user.name "github-actions[bot]"
