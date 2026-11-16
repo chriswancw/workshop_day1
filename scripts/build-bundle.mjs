@@ -10,10 +10,14 @@ const output = join(frontend, 'dist', 'snip-frontend', 'browser');
 const push = process.argv.includes('--push');
 
 function run(command, args, cwd = root, options = {}) {
-  const result = spawnSync(command, args, {
+  const windowsScript = process.platform === 'win32' && (command === 'npm' || command === 'npx');
+  const executable = windowsScript ? process.env.ComSpec ?? 'cmd.exe' : command;
+  const executableArgs = windowsScript
+    ? ['/d', '/s', '/c', `${command}.cmd ${args.join(' ')}`]
+    : args;
+  const result = spawnSync(executable, executableArgs, {
     cwd,
     stdio: options.stdio ?? 'inherit',
-    shell: process.platform === 'win32',
     encoding: options.encoding,
   });
   if (result.error) throw result.error;
@@ -31,7 +35,6 @@ function hasStagedChanges(cwd) {
   const result = spawnSync('git', ['diff', '--cached', '--quiet'], {
     cwd,
     stdio: 'ignore',
-    shell: process.platform === 'win32',
   });
   if (result.error) throw result.error;
   if (result.status === 1) return true;
@@ -57,10 +60,22 @@ function assertBundleBranch() {
   }
 }
 
+function configureBundleGitIdentity() {
+  for (const key of ['user.name', 'user.email']) {
+    const bundleValue = git(['config', key], bundle, { stdio: 'pipe', encoding: 'utf8' }).trim();
+    if (!bundleValue) {
+      const mainValue = git(['config', key], root, { stdio: 'pipe', encoding: 'utf8' }).trim();
+      if (!mainValue) throw new Error(`Git ${key} is not configured`);
+      git(['config', key, mainValue], bundle);
+    }
+  }
+}
+
 try {
   git(['submodule', 'update', '--init', '--remote', 'backend', 'frontend', 'cli']);
   assertClean(bundle, 'bundle submodule');
   assertBundleBranch();
+  configureBundleGitIdentity();
 
   run('npm', ['install'], frontend);
   run('npx', ['ng', 'build'], frontend);
